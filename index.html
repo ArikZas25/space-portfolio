@@ -23,12 +23,12 @@
     overflow: hidden;
     font-family: 'Share Tech Mono', monospace;
     cursor: none;
-    touch-action: none;
     -webkit-tap-highlight-color: transparent;
     -webkit-user-select: none;
     user-select: none;
   }
   canvas { display: block; touch-action: none; }
+  button { touch-action: manipulation; }
 
   /* ── HUD ── */
   #hud {
@@ -421,6 +421,18 @@ document.getElementById('start-btn').onclick   = startGame;
 document.getElementById('restart-btn').onclick  = startGame;
 document.getElementById('win-restart-btn').onclick = startGame;
 document.getElementById('win-github-btn').onclick  = () => window.open('https://github.com/arikzas25', '_blank');
+
+// Mobile Safari fallback — touchend on buttons for reliable tapping
+['start-btn','restart-btn','win-restart-btn'].forEach(id => {
+  document.getElementById(id).addEventListener('touchend', e => {
+    e.stopPropagation();
+    startGame();
+  });
+});
+document.getElementById('win-github-btn').addEventListener('touchend', e => {
+  e.stopPropagation();
+  window.open('https://github.com/arikzas25', '_blank');
+});
 
 function startGame() {
   document.getElementById('start-screen').style.display = 'none';
