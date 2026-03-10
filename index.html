@@ -304,7 +304,7 @@
     </div>
     <div class="terminal-body" id="terminal-body"></div>
     <div class="terminal-footer">
-      <button class="start-launch" id="start-btn">▶ &nbsp;./run_portfolio.sh</button>
+      <button class="start-launch" id="start-btn" style="display:none">▶ &nbsp;./run_portfolio.sh</button>
     </div>
   </div>
 </div>
@@ -434,12 +434,15 @@ document.getElementById('win-github-btn').addEventListener('touchend', e => {
   window.open('https://github.com/arikzas25', '_blank');
 });
 
+// Mobile gets slower speeds — touch screens are harder to control
+// (defined after isTouchDevice below)
+
 function startGame() {
   document.getElementById('start-screen').style.display = 'none';
   goScreen.style.display = 'none';
   winScreen.style.display = 'none';
   lives = 3; score = 0; wave = 1;
-  hazardSpeed = 2.2; spawnRate = 80;
+  hazardSpeed = 2.2 * MOBILE_SPEED_SCALE; spawnRate = 80;
   spawnTimer = 0; waveTimer = 0;
   invincible = false; invincibleTimer = 0;
   linksUnlocked = 0;
@@ -546,6 +549,8 @@ function flashHit() {
 // ── MOUSE & TOUCH ────────────────────────────────────
 let mouse = { x: W/2, y: H/2 };
 const isTouchDevice = () => window.matchMedia('(pointer: coarse)').matches;
+// Mobile gets slower speeds — touch screens are harder to control
+const MOBILE_SPEED_SCALE = window.matchMedia('(pointer: coarse)').matches ? 0.45 : 1.0;
 
 window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
 
@@ -1211,24 +1216,24 @@ class Hazard {
     this.homingDelay = 60 + Math.floor(Math.random()*60); // frames before homing kicks in
   }
 
-  update(){
+  update(dt=1){
     // Homing: steer toward ship after delay
     if ((this.homing || this.boss) && this.homingDelay > 0) {
-      this.homingDelay--;
+      this.homingDelay -= dt;
     } else if (this.homing || this.boss) {
       const dx = ship.x - this.x, dy = ship.y - this.y;
       const dist = Math.sqrt(dx*dx+dy*dy);
       const turnStrength = this.boss ? 0.025 : 0.018;
       if (dist > 1) {
-        this.vx += (dx/dist) * turnStrength;
-        this.vy += (dy/dist) * turnStrength;
+        this.vx += (dx/dist) * turnStrength * dt;
+        this.vy += (dy/dist) * turnStrength * dt;
         // Cap speed
         const spd = Math.sqrt(this.vx*this.vx+this.vy*this.vy);
         const maxSpd = this.boss ? 5 : 7;
         if (spd > maxSpd) { this.vx=(this.vx/spd)*maxSpd; this.vy=(this.vy/spd)*maxSpd; }
       }
     }
-    this.x+=this.vx;this.y+=this.vy;this.rotation+=this.rotSpeed;
+    this.x+=this.vx*dt;this.y+=this.vy*dt;this.rotation+=this.rotSpeed*dt;
     if(this.x<-120||this.x>W+120||this.y<-120||this.y>H+120) this.dead=true;
   }
 
@@ -1287,36 +1292,38 @@ class Ship {
     this.x=W/2;this.y=H/2;this.vx=0;this.vy=0;
     this.trail=[];this.thrustParticles=[];
   }
-  update(){
+  update(dt=1){
     const dx=mouse.x-this.x,dy=mouse.y-this.y,dist=Math.sqrt(dx*dx+dy*dy);
-    if(dist>5){const sp=Math.min(dist*.08,10);this.vx+=(dx/dist)*sp*.15;this.vy+=(dy/dist)*sp*.15;}
-    this.vx*=0.88;this.vy*=0.88;
-    this.x+=this.vx;this.y+=this.vy;
+    if(dist>5){const sp=Math.min(dist*.08,10);this.vx+=(dx/dist)*sp*.15*dt;this.vy+=(dy/dist)*sp*.15*dt;}
+    const drag=Math.pow(0.88,dt);
+    this.vx*=drag;this.vy*=drag;
+    this.x+=this.vx*dt;this.y+=this.vy*dt;
     this.x=Math.max(20,Math.min(W-20,this.x));
     this.y=Math.max(20,Math.min(H-20,this.y));
 
     // ── CAMERA SCROLL: ship past middle scrolls world ──
     if(gameRunning){
+      const camSpeed = 4.5 * MOBILE_SPEED_SCALE;
       // Scroll DOWN when ship in bottom half
       const downZone = H * 0.52;
       if(this.y > downZone){
         const depth = (this.y - downZone) / (H * 0.48);
-        targetCameraY += depth * 4.5;
+        targetCameraY += depth * camSpeed * dt;
       }
       // Scroll UP when ship in top half
       const upZone = H * 0.48;
       if(this.y < upZone){
         const depth = (upZone - this.y) / (H * 0.48);
-        targetCameraY -= depth * 4.5;
+        targetCameraY -= depth * camSpeed * dt;
       }
       // Clamp between 0 and world bottom
       targetCameraY = Math.max(0, Math.min(targetCameraY, WORLD_HEIGHT - H));
-      cameraY += (targetCameraY - cameraY) * 0.06;
+      cameraY += (targetCameraY - cameraY) * (1 - Math.pow(0.94, dt));
     }
 
     this.trail.push({x:this.x,y:this.y,life:1});
     if(this.trail.length>22)this.trail.shift();
-    this.trail.forEach(t=>t.life-=0.045);
+    this.trail.forEach(t=>t.life-=0.045*dt);
     const sp=Math.sqrt(this.vx*this.vx+this.vy*this.vy);
     if(sp>1){
       const angle=Math.atan2(this.vy,this.vx)+Math.PI;
@@ -1327,7 +1334,7 @@ class Ship {
         life:1,size:Math.random()*3+1
       });
     }
-    this.thrustParticles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life-=0.06;});
+    this.thrustParticles.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=0.06*dt;});
     this.thrustParticles=this.thrustParticles.filter(p=>p.life>0);
   }
   draw(){
@@ -1445,14 +1452,21 @@ const BOOT_LINES = [
 
 (function runBootSequence() {
   const body = document.getElementById('terminal-body');
+  const btn  = document.getElementById('start-btn');
   const touch = window.matchMedia('(pointer: coarse)').matches;
+
+  // Button is hidden until animation completes
+  btn.style.display  = 'none';
+  btn.disabled       = true;
+
   const lines = BOOT_LINES.map(l => {
-    if (l.text === '  mouse     →  navigate data space')
-      return { ...l, text: touch ? '  drag      →  navigate data space' : l.text };
-    if (l.text === '  click     →  activate neural nodes')
-      return { ...l, text: touch ? '  tap       →  activate neural nodes' : l.text };
+    if (l.text === '  mouse     →  navigate')
+      return { ...l, text: touch ? '  drag      →  navigate' : l.text };
+    if (l.text === '  click     →  open project nodes')
+      return { ...l, text: touch ? '  tap       →  open project nodes' : l.text };
     return l;
   });
+
   lines.forEach(({ text, cls, delay }) => {
     setTimeout(() => {
       const line = document.createElement('div');
@@ -1462,6 +1476,21 @@ const BOOT_LINES = [
       body.scrollTop = body.scrollHeight;
     }, delay);
   });
+
+  // Reveal button only after last line finishes
+  const lastDelay = Math.max(...lines.map(l => l.delay));
+  setTimeout(() => {
+    btn.style.display   = 'inline-block';
+    btn.disabled        = false;
+    btn.style.opacity   = '0';
+    btn.style.transition = 'opacity 0.5s, box-shadow 0.3s';
+    // Fade in
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      btn.style.opacity    = '1';
+      btn.style.boxShadow  = '0 0 28px rgba(0,255,65,0.8)';
+      setTimeout(() => { btn.style.boxShadow = ''; }, 700);
+    }));
+  }, lastDelay + 400);
 })();
 
 // ── CS EASTER EGGS (floating text in world) ─────────
@@ -1552,7 +1581,17 @@ updateCursor();
 
 
 let scoreTickTimer = 0;
-function loop(){
+const TARGET_FPS = 60;
+const FRAME_MS   = 1000 / TARGET_FPS;
+let lastFrameTime = 0;
+
+function loop(timestamp){
+  requestAnimationFrame(loop);
+  const elapsed = timestamp - lastFrameTime;
+  if (elapsed < FRAME_MS) return;
+  // dt: how many 60fps ticks this frame represents (1.0 = perfect 60fps)
+  const dt = Math.min(elapsed / FRAME_MS, 3); // clamp so tab-switch doesn't explode
+  lastFrameTime = timestamp - (elapsed % FRAME_MS);
   ctx.clearRect(0,0,W,H);
   ctx.fillStyle='#00050a';ctx.fillRect(0,0,W,H);
   drawMatrix();
@@ -1565,10 +1604,10 @@ function loop(){
 
   if(gameRunning){
     // Wave timer
-    waveTimer++;
+    waveTimer += dt;
     if(waveTimer>=WAVE_INTERVAL){
       waveTimer=0; wave++;
-      hazardSpeed = Math.min(2.2 + wave*0.5, 9);
+      hazardSpeed = Math.min((2.2 + wave*0.5) * MOBILE_SPEED_SCALE, 9 * MOBILE_SPEED_SCALE);
       spawnRate   = Math.max(18, 80 - wave*9);
       updateHUD();
       showWaveAnnounce(wave);
@@ -1577,7 +1616,7 @@ function loop(){
     }
 
     // Spawn hazards
-    spawnTimer++;
+    spawnTimer += dt;
     if(spawnTimer>=spawnRate){
       spawnTimer=0;
       // From epoch 3: some ERR packets home in on ship
@@ -1591,11 +1630,11 @@ function loop(){
     }
 
     // Invincibility countdown
-    if(invincible){ invincibleTimer--; if(invincibleTimer<=0)invincible=false; }
+    if(invincible){ invincibleTimer -= dt; if(invincibleTimer<=0)invincible=false; }
 
     // Glitch effect countdown
     if (glitchFrames > 0) {
-      glitchFrames--;
+      glitchFrames -= dt;
       // Draw glitch scanline bars
       ctx.save();
       const numBars = 4 + Math.floor(Math.random()*4);
@@ -1615,7 +1654,7 @@ function loop(){
 
     // Update & draw hazards
     for(let i=hazards.length-1;i>=0;i--){
-      hazards[i].update();
+      hazards[i].update(dt);
       if(hazards[i].dead){hazards.splice(i,1);continue;}
       hazards[i].draw();
       if(ship.collidesWith(hazards[i])){
@@ -1631,7 +1670,7 @@ function loop(){
     // General particles (death burst)
     for(let i=particles.length-1;i>=0;i--){
       const p=particles[i];
-      p.x+=p.vx;p.y+=p.vy;p.vy+=0.06;p.life-=0.035;
+      p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=0.06*dt;p.life-=0.035*dt;
       if(p.life<=0){particles.splice(i,1);continue;}
       ctx.globalAlpha=p.life;
       ctx.fillStyle=p.color;
@@ -1640,7 +1679,7 @@ function loop(){
     ctx.globalAlpha=1;
 
     // Score ticks — survive bonus
-    scoreTickTimer++;
+    scoreTickTimer += dt;
     if(scoreTickTimer>=90){ scoreTickTimer=0; score+=wave*3; updateHUD(); }
 
     // Update depth bar
@@ -1768,14 +1807,12 @@ function loop(){
     });
   }
 
-  ship.update();
+  ship.update(dt);
   ship.draw();
   drawCursor();
-
-  requestAnimationFrame(loop);
 }
 
-loop();
+requestAnimationFrame(loop);
 </script>
 </body>
 </html>
