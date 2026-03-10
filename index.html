@@ -1,0 +1,1768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ARIK.DEV // SPACE PORTFOLIO</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&display=swap');
+
+  :root {
+    --green: #00ff41;
+    --green2: #00cc33;
+    --dim: #006614;
+    --cyan: #00ffcc;
+    --red: #ff3333;
+    --yellow: #ffff00;
+    --bg: #0a0f0a;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    overflow: hidden;
+    font-family: 'Share Tech Mono', monospace;
+    cursor: none;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  canvas { display: block; touch-action: none; }
+
+  /* ── HUD ── */
+  #hud {
+    position:fixed; top:14px; left:50%; transform:translateX(-50%);
+    text-align:center; pointer-events:none; z-index:10;
+  }
+  #hud .title {
+    font-family:'Orbitron',monospace; font-size:20px; font-weight:900;
+    color:var(--green); letter-spacing:6px;
+    text-shadow:0 0 10px var(--green), 0 0 25px var(--green);
+  }
+  #hud .subtitle {
+    color:var(--dim); font-size:11px; letter-spacing:2px; margin-top:3px;
+    animation: blink 1.2s step-end infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  #lives {
+    position:fixed; top:14px; left:16px;
+    color:var(--red); font-size:11px; font-family:'Share Tech Mono',monospace;
+    pointer-events:none; z-index:10; line-height:1.9;
+  }
+  #score-box {
+    position:fixed; top:14px; right:16px;
+    color:var(--yellow); font-size:11px; font-family:'Share Tech Mono',monospace;
+    text-align:right; pointer-events:none; z-index:10; line-height:1.9;
+  }
+  #depth-bar {
+    position:fixed; right:16px; bottom:55px;
+    pointer-events:none; z-index:10; text-align:right;
+    font-family:'Share Tech Mono',monospace;
+  }
+
+  #instructions {
+    position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+    color:var(--dim); font-size:11px; text-align:center; letter-spacing:1px;
+    pointer-events:none; z-index:10;
+  }
+
+  #wave-announce {
+    position:fixed; top:48%; left:50%; transform:translate(-50%,-50%);
+    font-family:'Share Tech Mono',monospace; font-size:18px;
+    color:var(--green); text-shadow:0 0 14px var(--green);
+    pointer-events:none; z-index:40; opacity:0; letter-spacing:2px;
+    transition:opacity 0.3s;
+  }
+
+  /* ── SCANLINES ── */
+  #scanlines {
+    position:fixed; inset:0; pointer-events:none; z-index:5;
+    background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.12) 2px,rgba(0,0,0,0.12) 4px);
+  }
+  /* CRT phosphor vignette */
+  #crt {
+    position:fixed; inset:0; pointer-events:none; z-index:4;
+    background:radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.55) 100%);
+  }
+  .hit-flash {
+    position:fixed; inset:0; pointer-events:none; z-index:6;
+    background:rgba(255,30,0,0.3); opacity:0; transition:opacity 0.08s;
+  }
+
+  /* ── TERMINAL WINDOW (shared) ── */
+  .terminal-window {
+    background:#0d120d;
+    border:1px solid var(--green2);
+    box-shadow:0 0 30px rgba(0,255,65,0.25), 0 0 80px rgba(0,255,65,0.08);
+    border-radius:6px;
+    width:min(680px, 92vw);
+    max-height:90vh;
+    overflow:hidden;
+    display:flex; flex-direction:column;
+    animation:fadeInUp 0.5s ease both;
+  }
+  @keyframes fadeInUp {
+    from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)}
+  }
+
+  .terminal-titlebar {
+    background:#1a221a;
+    border-bottom:1px solid #1f2f1f;
+    padding:8px 12px;
+    display:flex; align-items:center; gap:7px;
+    flex-shrink:0;
+  }
+  .t-dot { width:12px; height:12px; border-radius:50%; display:inline-block; }
+  .t-title {
+    color:#446644; font-size:12px; margin-left:8px;
+    font-family:'Share Tech Mono',monospace; letter-spacing:1px;
+  }
+
+  .terminal-body {
+    padding:18px 20px;
+    font-family:'Share Tech Mono',monospace;
+    font-size:13px;
+    line-height:1.8;
+    color:var(--green);
+    overflow-y:auto;
+    flex:1;
+  }
+
+  .terminal-footer {
+    border-top:1px solid #1a2a1a;
+    padding:14px 20px;
+    display:flex; justify-content:center;
+    flex-shrink:0;
+  }
+
+  /* Terminal line types */
+  .t-line { display:block; white-space:pre; }
+  .t-prompt::before { content:'$ '; color:var(--cyan); }
+  .t-out   { color:var(--green); }
+  .t-dim   { color:var(--dim); }
+  .t-cyan  { color:var(--cyan); }
+  .t-yellow{ color:var(--yellow); }
+  .t-red   { color:var(--red); }
+  .t-white { color:#ccffcc; }
+  .t-bold  { color:#afffaf; font-weight:bold; }
+  .t-cursor::after { content:'▋'; animation:blink 0.9s step-end infinite; }
+
+  /* Launch button */
+  .start-launch {
+    background:transparent;
+    border:1px solid var(--green);
+    color:var(--green);
+    font-family:'Share Tech Mono',monospace;
+    font-size:14px;
+    letter-spacing:2px;
+    padding:10px 28px;
+    cursor:pointer;
+    transition:all 0.18s;
+    box-shadow:0 0 12px rgba(0,255,65,0.3);
+  }
+  .start-launch:hover {
+    background:rgba(0,255,65,0.1);
+    box-shadow:0 0 28px rgba(0,255,65,0.6);
+    color:#afffaf;
+  }
+  #start-screen * { cursor:default !important; }
+  #start-screen .start-launch { cursor:pointer !important; }
+
+  /* ── START SCREEN ── */
+  #start-screen {
+    position:fixed; inset:0; z-index:50;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--bg);
+    cursor:default !important;
+  }
+  #start-screen::before {
+    content:'';
+    position:absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(0,255,65,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,65,0.04) 1px, transparent 1px);
+    background-size:32px 32px;
+    animation:gridScroll 5s linear infinite;
+  }
+  @keyframes gridScroll {
+    0%{background-position:0 0} 100%{background-position:32px 32px}
+  }
+  #start-screen::after {
+    content:''; position:absolute; inset:0;
+    background:radial-gradient(ellipse at center, transparent 35%, var(--bg) 100%);
+    pointer-events:none;
+  }
+
+  /* ── GAME OVER SCREEN ── */
+  #gameover-screen {
+    position:fixed; inset:0; z-index:50;
+    display:none; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0.93);
+    cursor:default !important;
+  }
+  #gameover-screen * { cursor:default !important; }
+  #gameover-screen .start-launch { cursor:pointer !important; }
+  .go-terminal { border-color: var(--red); box-shadow:0 0 30px rgba(255,50,50,0.2); }
+  .go-body { font-size:12px; }
+  .go-line { display:block; white-space:pre; line-height:1.7; }
+  .go-line.err  { color:var(--red); }
+  .go-line.warn { color:var(--yellow); }
+  .go-line.dim  { color:#445544; }
+  .go-line.ok   { color:var(--cyan); }
+  .go-line.prompt { color:var(--green); margin-top:6px; }
+  .blink-cur { animation:blink 0.9s step-end infinite; }
+  /* ── WIN SCREEN ── */
+  #win-screen {
+    position:fixed; inset:0; z-index:50;
+    display:none; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0.95);
+    cursor:default !important;
+  }
+  #win-screen * { cursor:default !important; }
+  #win-screen .start-launch { cursor:pointer !important; }
+  .win-terminal { border-color: var(--cyan); box-shadow:0 0 40px rgba(0,255,204,0.25), 0 0 80px rgba(0,255,65,0.1); }
+  .win-body { font-size:12px; }
+  .win-line { display:block; white-space:pre; line-height:1.7; }
+  .win-line.ok   { color:var(--cyan); }
+  .win-line.gold { color:var(--yellow); }
+  .win-line.grn  { color:var(--green); }
+  .win-line.dim  { color:#445544; }
+  .win-line.bold { color:#afffaf; font-weight:bold; font-size:14px; }
+  .win-line.prompt { color:var(--green); margin-top:6px; }
+
+  @keyframes winGlow {
+    0%,100% { text-shadow: 0 0 10px var(--cyan), 0 0 30px var(--cyan); }
+    50%      { text-shadow: 0 0 20px var(--yellow), 0 0 50px var(--yellow); }
+  }
+  .win-trophy {
+    font-size:32px; text-align:center; display:block;
+    animation: winGlow 1.5s ease-in-out infinite;
+    letter-spacing:4px; margin-bottom:6px;
+  }
+
+  /* ── MOBILE ── */
+  @media (pointer: coarse) {
+    body { cursor: default; }
+    #instructions { font-size: 10px; bottom: 10px; }
+    #lives { font-size: 13px; }
+    #score-box { font-size: 13px; }
+    #hud .title { font-size: 16px; }
+    #hud .subtitle { font-size: 10px; }
+    .terminal-window { width: min(96vw, 500px); font-size: 11px; }
+    .terminal-body { font-size: 11px; padding: 12px 14px; max-height: 55vh; }
+    .start-launch { font-size: 13px; padding: 12px 22px; }
+    .go-body { font-size: 11px; }
+    #mobile-hint {
+      display: block !important;
+      position: fixed; bottom: 38px; left: 50%; transform: translateX(-50%);
+      color: #446644; font-size: 10px; font-family: 'Share Tech Mono', monospace;
+      pointer-events: none; z-index: 10; text-align: center; white-space: nowrap;
+    }
+  }
+  #mobile-hint { display: none; }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div class="title">ARIK.DEV</div>
+  <div class="subtitle">▶ neural_net.exe --running</div>
+</div>
+
+<div id="lives">
+  <span id="lives-val">■■■</span> hp<br>
+  <span style="color:#446644;font-size:10px" id="status-msg">status: ok</span>
+</div>
+<div id="score-box">
+  score: <span id="score-val">0</span><br>
+  epoch: <span id="wave-val">1</span>
+</div>
+<div id="depth-bar" style="position:fixed;right:16px;bottom:55px;pointer-events:none;z-index:10;text-align:right;font-family:'Share Tech Mono',monospace;">
+  <div style="font-size:11px;color:#446644;margin-bottom:4px;" id="depth-label">depth: 0%</div>
+  <div style="width:5px;height:70px;background:rgba(0,255,65,0.08);border:1px solid #224422;overflow:hidden;display:inline-block;vertical-align:top;">
+    <div id="depth-fill" style="width:100%;background:#00ff41;height:0%;transition:height 0.3s;"></div>
+  </div>
+</div>
+
+<div id="instructions">move mouse · dodge ERR packets · click nodes to activate</div>
+<div id="mobile-hint">drag to fly · tap nodes to activate</div>
+<div id="wave-announce"></div>
+<div id="scanlines"></div>
+<div id="crt"></div>
+<div class="hit-flash" id="hitFlash"></div>
+
+<!-- START SCREEN — Terminal Boot -->
+<div id="start-screen">
+  <div class="terminal-window">
+    <div class="terminal-titlebar">
+      <span class="t-dot" style="background:#ff5f57"></span>
+      <span class="t-dot" style="background:#febc2e"></span>
+      <span class="t-dot" style="background:#28c840"></span>
+      <span class="t-title">arik@portfolio:~</span>
+    </div>
+    <div class="terminal-body" id="terminal-body"></div>
+    <div class="terminal-footer">
+      <button class="start-launch" id="start-btn">▶ &nbsp;./run_portfolio.sh</button>
+    </div>
+  </div>
+</div>
+
+<!-- GAME OVER — Segfault crash screen -->
+<div id="gameover-screen" style="display:none">
+  <div class="terminal-window go-terminal">
+    <div class="terminal-titlebar">
+      <span class="t-dot" style="background:#ff5f57"></span>
+      <span class="t-dot" style="background:#febc2e"></span>
+      <span class="t-dot" style="background:#28c840"></span>
+      <span class="t-title">arik@portfolio:~ [PROCESS KILLED]</span>
+    </div>
+    <div class="terminal-body go-body">
+      <div class="go-line err">Segmentation fault (core dumped)</div>
+      <div class="go-line dim">Process: portfolio [PID 1337] crashed.</div>
+      <div class="go-line dim">Signal: SIGSEGV — invalid memory access</div>
+      <div class="go-line">&nbsp;</div>
+      <div class="go-line warn">Exception in thread "main":</div>
+      <div class="go-line warn">java.lang.NullPointerException: ship == null</div>
+      <div class="go-line dim">&nbsp;&nbsp;at DodgeCorruptData.update(Game.java:404)</div>
+      <div class="go-line dim">&nbsp;&nbsp;at Main.loop(Main.java:42)</div>
+      <div class="go-line">&nbsp;</div>
+      <div class="go-line ok">── CRASH REPORT ──────────────────────</div>
+      <div class="go-line ok" id="go-score-line">ACCURACY &nbsp;&nbsp;&nbsp;: 0</div>
+      <div class="go-line ok" id="go-nodes-line">NODES FOUND: 0 / 7</div>
+      <div class="go-line">&nbsp;</div>
+      <div class="go-line dim">$ git stash &amp;&amp; git checkout -- .</div>
+      <div class="go-line prompt">arik@portfolio:~$ <span class="blink-cur">▋</span></div>
+    </div>
+    <div class="terminal-footer">
+      <button class="start-launch" id="restart-btn">↩ &nbsp;./retry.sh</button>
+    </div>
+  </div>
+</div>
+
+<!-- WIN SCREEN — Portfolio Complete -->
+<div id="win-screen" style="display:none">
+  <div class="terminal-window win-terminal">
+    <div class="terminal-titlebar">
+      <span class="t-dot" style="background:#ff5f57"></span>
+      <span class="t-dot" style="background:#febc2e"></span>
+      <span class="t-dot" style="background:#28c840"></span>
+      <span class="t-title">arik@portfolio:~ [ALL NODES UNLOCKED]</span>
+    </div>
+    <div class="terminal-body win-body">
+      <span class="win-trophy">🏆 ✦ 🏆</span>
+      <div class="win-line bold">  SYSTEM FULLY UNLOCKED</div>
+      <div class="win-line dim">  ─────────────────────────────────────</div>
+      <div class="win-line grn">&nbsp;</div>
+      <div class="win-line grn">  $ ./verify_nodes.sh --all</div>
+      <div class="win-line ok">  [✓] LINKEDIN       ... connected</div>
+      <div class="win-line ok">  [✓] GITHUB         ... connected</div>
+      <div class="win-line ok">  [✓] KEYBOUND       ... activated</div>
+      <div class="win-line ok">  [✓] DUNKING BALL   ... activated</div>
+      <div class="win-line ok">  [✓] LIAV.DEV       ... activated</div>
+      <div class="win-line ok">  [✓] WHATSAPP       ... connected</div>
+      <div class="win-line ok">  [✓] EMAIL          ... connected</div>
+      <div class="win-line ok">  [✓] BOSS NODE      ... unlocked</div>
+      <div class="win-line grn">&nbsp;</div>
+      <div class="win-line dim">  ─────────────────────────────────────</div>
+      <div class="win-line gold">  FINAL SCORE : <span id="win-score-val">0</span></div>
+      <div class="win-line gold">  EPOCH REACHED : <span id="win-wave-val">1</span></div>
+      <div class="win-line grn">&nbsp;</div>
+      <div class="win-line grn">  // thanks for exploring the portfolio!</div>
+      <div class="win-line prompt">  arik@portfolio:~$ <span class="blink-cur">▋</span></div>
+    </div>
+    <div class="terminal-footer" style="gap:14px; display:flex; justify-content:center; flex-wrap:wrap;">
+      <button class="start-launch" id="win-restart-btn">↩ &nbsp;./play_again.sh</button>
+      <button class="start-launch" id="win-github-btn" style="border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 12px rgba(0,255,204,0.3);">⎋ &nbsp;./open_github.sh</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = window.innerWidth;
+let H = canvas.height = window.innerHeight;
+window.addEventListener('resize', () => {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+});
+
+// ── STATE ──────────────────────────────────────────
+let gameRunning = false;
+let lives = 3, score = 0, wave = 1;
+let invincible = false, invincibleTimer = 0;
+let waveTimer = 0;
+const WAVE_INTERVAL = 1500;
+let hazardSpeed = 2.2;
+let spawnRate = 80;
+let spawnTimer = 0;
+let linksUnlocked = 0;
+
+// ── WORLD SCROLL (camera) ───────────────────────────
+let cameraY = 0;        // how far the world has scrolled down (in pixels)
+let targetCameraY = 0;  // smooth target
+const WORLD_HEIGHT = H * 4; // total scrollable world height
+
+const livesEl  = document.getElementById('lives-val');
+const scoreEl  = document.getElementById('score-val');
+const waveEl   = document.getElementById('wave-val');
+const waveAnn  = document.getElementById('wave-announce');
+const hitFlash = document.getElementById('hitFlash');
+const goScreen = document.getElementById('gameover-screen');
+const goScore  = document.getElementById('gameover-score');
+const goLinks  = document.getElementById('gameover-links');
+const winScreen = document.getElementById('win-screen');
+
+document.getElementById('start-btn').onclick   = startGame;
+document.getElementById('restart-btn').onclick  = startGame;
+document.getElementById('win-restart-btn').onclick = startGame;
+document.getElementById('win-github-btn').onclick  = () => window.open('https://github.com/arikzas25', '_blank');
+
+function startGame() {
+  document.getElementById('start-screen').style.display = 'none';
+  goScreen.style.display = 'none';
+  winScreen.style.display = 'none';
+  lives = 3; score = 0; wave = 1;
+  hazardSpeed = 2.2; spawnRate = 80;
+  spawnTimer = 0; waveTimer = 0;
+  invincible = false; invincibleTimer = 0;
+  linksUnlocked = 0;
+  hazards.length = 0;
+  particles.length = 0;
+  asteroids.forEach(a => {
+    a.exploding = false; a.explodeDone = false;
+    a.explodeParticles = []; a.explodeTimer = 0;
+  });
+  ship.x = W/2; ship.y = H/2; ship.vx = 0; ship.vy = 0;
+  ship.trail = []; ship.thrustParticles = [];
+  cameraY = 0; targetCameraY = 0;
+  bossNode = null; bossNodeSpawned = false;
+  updateHUD();
+  gameRunning = true;
+  updateCursor();
+  showWaveAnnounce(1);
+}
+
+function updateHUD() {
+  const bars = '■'.repeat(lives) + '□'.repeat(Math.max(0, 3-lives));
+  livesEl.textContent = bars;
+  scoreEl.textContent = score;
+  waveEl.textContent  = wave;
+  const msgs = ['status: ok','heap: stable','uptime: high','no leaks'];
+  document.getElementById('status-msg').textContent = lives > 1 ? msgs[wave%msgs.length] : 'WARNING: low hp';
+  document.getElementById('status-msg').style.color = lives > 1 ? '#446644' : '#ff3333';
+}
+
+let waveAnnTimeout = null;
+function showWaveAnnounce(w) {
+  if (w === 'BOSS') {
+    waveAnn.textContent = '🧠 ALL NODES COLLECTED — BOSS NODE SPAWNED';
+    waveAnn.style.color = '#00ffcc';
+    waveAnn.style.textShadow = '0 0 20px #00ffcc';
+    waveAnn.style.opacity = 1;
+    if (waveAnnTimeout) clearTimeout(waveAnnTimeout);
+    waveAnnTimeout = setTimeout(() => { waveAnn.style.opacity = 0; }, 3000);
+    return;
+  }
+  const isBoss = w % 3 === 0;
+  waveAnn.textContent = isBoss
+    ? `⚠ EPOCH ${w} — BOSS WAVE // brace yourself`
+    : w === 1 ? '> ./epoch_1.sh — training begin'
+    : `> ./epoch_${w}.sh — loss increasing`;
+  waveAnn.style.color = isBoss ? '#ff0044' : '#00ff41';
+  waveAnn.style.textShadow = isBoss ? '0 0 20px #ff0044' : '0 0 14px #00ff41';
+  waveAnn.style.opacity = 1;
+  if (waveAnnTimeout) clearTimeout(waveAnnTimeout);
+  waveAnnTimeout = setTimeout(() => { waveAnn.style.opacity = 0; }, 2200);
+}
+
+function triggerBossWave() {
+  // Flood with 8 boss packets from all edges
+  for (let i = 0; i < 8; i++) {
+    setTimeout(() => {
+      hazards.push(new Hazard(hazardSpeed * 0.8, { boss: true, homing: true }));
+    }, i * 180);
+  }
+}
+
+function gameOver() {
+  gameRunning = false;
+  document.getElementById('go-score-line').textContent = 'ACCURACY   : ' + score;
+  document.getElementById('go-nodes-line').textContent = 'NODES FOUND: ' + linksUnlocked + ' / 7';
+  goScreen.style.display = 'flex';
+  updateCursor();
+}
+
+function gameWin() {
+  gameRunning = false;
+  document.getElementById('win-score-val').textContent = score;
+  document.getElementById('win-wave-val').textContent = wave;
+  winScreen.style.display = 'flex';
+  updateCursor();
+  // Victory fireworks
+  for (let i = 0; i < 60; i++) {
+    setTimeout(() => {
+      const x = Math.random() * W;
+      const y = Math.random() * H * 0.7;
+      spawnWinBurst(x, y);
+    }, i * 80);
+  }
+}
+
+function spawnWinBurst(x, y) {
+  const colors = ['#00ff41','#00ffcc','#ffff00','#ff88ff','#ffffff','#afffaf'];
+  for (let i = 0; i < 18; i++) {
+    const a = Math.random()*Math.PI*2, sp = Math.random()*6+2;
+    particles.push({
+      x, y,
+      vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
+      life: 1, size: Math.random()*3+1,
+      color: colors[Math.floor(Math.random()*colors.length)]
+    });
+  }
+}
+
+function flashHit() {
+  hitFlash.style.opacity = 1;
+  setTimeout(() => { hitFlash.style.opacity = 0; }, 130);
+}
+
+// ── MOUSE & TOUCH ────────────────────────────────────
+let mouse = { x: W/2, y: H/2 };
+const isTouchDevice = () => window.matchMedia('(pointer: coarse)').matches;
+
+window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+
+// Touch: finger position drives ship like mouse
+window.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  mouse.x = t.clientX;
+  mouse.y = t.clientY;
+}, { passive: false });
+
+window.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  mouse.x = t.clientX;
+  mouse.y = t.clientY;
+}, { passive: false });
+
+// Tap = click on portal or boss node
+window.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (!gameRunning) return;
+  const t = e.changedTouches[0];
+  const tx = t.clientX, ty = t.clientY;
+  asteroids.forEach(a => {
+    if (a.exploding || a.explodeDone) return;
+    const sy = a.screenY;
+    const dx = tx - a.x, dy = ty - sy;
+    if (Math.sqrt(dx*dx + dy*dy) < a.radius + 20) {
+      if (a.url && !a.url.startsWith('#')) window.open(a.url, '_blank');
+      a.explode();
+    }
+  });
+  if (bossNode && !bossNode.activated) {
+    const sy = bossNode.screenY;
+    const dx = tx - bossNode.x, dy = ty - sy;
+    if (Math.sqrt(dx*dx+dy*dy) < bossNode.radius + 30) bossNode.activate();
+  }
+}, { passive: false });
+
+// ── MATRIX RAIN ─────────────────────────────────────
+const MATRIX_CHARS = '01アイウエオカキクケコ∑∂∇λπΩ∫≈≠<>{}[]();=+-*/&|^~';
+let matrixCols = [];
+function initMatrix() {
+  matrixCols = [];
+  const colW = 18;
+  const cols = Math.ceil(W / colW);
+  for (let i = 0; i < cols; i++) {
+    matrixCols.push({
+      x: i * colW + colW/2,
+      y: Math.random() * H * 4,
+      speed: Math.random() * 1.2 + 0.4,
+      chars: Array.from({length: Math.floor(Math.random()*12+6)}, () =>
+        MATRIX_CHARS[Math.floor(Math.random()*MATRIX_CHARS.length)]),
+      bright: Math.random(),
+      changeTimer: 0,
+    });
+  }
+}
+initMatrix();
+window.addEventListener('resize', () => {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  initMatrix(); initNeuralNet(); initEasterEggs();
+});
+
+function drawMatrix() {
+  const t = Date.now();
+  matrixCols.forEach(col => {
+    col.changeTimer++;
+    if (col.changeTimer > 20) {
+      col.changeTimer = 0;
+      const ri = Math.floor(Math.random()*col.chars.length);
+      col.chars[ri] = MATRIX_CHARS[Math.floor(Math.random()*MATRIX_CHARS.length)];
+    }
+    // Parallax: matrix moves at 60% camera speed
+    const offsetY = (col.y - cameraY * 0.6);
+    col.chars.forEach((ch, i) => {
+      const cy2 = ((offsetY + i * 18) % (H + 200) + H + 200) % (H + 200) - 100;
+      const fade = 1 - i / col.chars.length;
+      const headGlow = i === 0;
+      ctx.save();
+      ctx.globalAlpha = headGlow ? 0.9 : fade * 0.25;
+      ctx.fillStyle = headGlow ? '#afffaf' : '#00ff41';
+      ctx.font = `${headGlow ? 11 : 10}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(ch, col.x, cy2);
+      ctx.restore();
+    });
+  });
+}
+
+// ── NEURAL NETWORK NODES ────────────────────────────
+let neuralNodes = [], neuralEdges = [];
+function initNeuralNet() {
+  neuralNodes = [];
+  neuralEdges = [];
+  // Scattered nodes across the world
+  const count = 40;
+  for (let i = 0; i < count; i++) {
+    neuralNodes.push({
+      x: Math.random() * W,
+      worldY: Math.random() * WORLD_HEIGHT,
+      r: Math.random() * 3 + 2,
+      pulse: Math.random() * Math.PI * 2,
+      active: false,
+      activeTimer: 0,
+    });
+  }
+  // Connect nearby nodes
+  for (let i = 0; i < neuralNodes.length; i++) {
+    for (let j = i+1; j < neuralNodes.length; j++) {
+      const dx = neuralNodes[i].x - neuralNodes[j].x;
+      const dy = neuralNodes[i].worldY - neuralNodes[j].worldY;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 280) neuralEdges.push({a:i, b:j, dist});
+    }
+  }
+}
+initNeuralNet();
+
+// Randomly fire signals through the network
+let signalTimer = 0;
+function updateNeuralNet() {
+  signalTimer++;
+  if (signalTimer > 45) {
+    signalTimer = 0;
+    const ri = Math.floor(Math.random() * neuralNodes.length);
+    neuralNodes[ri].active = true;
+    neuralNodes[ri].activeTimer = 40;
+  }
+  neuralNodes.forEach(n => {
+    if (n.activeTimer > 0) {
+      n.activeTimer--;
+      if (n.activeTimer === 0) n.active = false;
+    }
+  });
+}
+
+function drawNeuralNet() {
+  // Edges
+  neuralEdges.forEach(e => {
+    const a = neuralNodes[e.a], b = neuralNodes[e.b];
+    const ay = a.worldY - cameraY * 0.8;
+    const by = b.worldY - cameraY * 0.8;
+    if (ay < -50 && by < -50) return;
+    if (ay > H+50 && by > H+50) return;
+    const active = a.active || b.active;
+    ctx.save();
+    ctx.globalAlpha = active ? 0.35 : 0.06;
+    ctx.strokeStyle = active ? '#00ffff' : '#004433';
+    ctx.lineWidth = active ? 1.2 : 0.5;
+    ctx.beginPath(); ctx.moveTo(a.x, ay); ctx.lineTo(b.x, by); ctx.stroke();
+    ctx.restore();
+  });
+  // Nodes
+  neuralNodes.forEach(n => {
+    const ny = n.worldY - cameraY * 0.8;
+    if (ny < -20 || ny > H+20) return;
+    const p = 0.5 + 0.5*Math.sin(Date.now()*0.003 + n.pulse);
+    ctx.save();
+    ctx.globalAlpha = n.active ? 0.9 : 0.2 + 0.15*p;
+    ctx.fillStyle = n.active ? '#00ffff' : '#00aa66';
+    ctx.beginPath(); ctx.arc(n.x, ny, n.active ? n.r+2 : n.r, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+// ── CIRCUIT TRACES ───────────────────────────────────
+let circuitLines = [];
+function initCircuit() {
+  circuitLines = [];
+  for (let i = 0; i < 18; i++) {
+    const x = Math.random() * W;
+    const worldY = Math.random() * WORLD_HEIGHT;
+    const len = Math.random() * 120 + 40;
+    const horiz = Math.random() > 0.5;
+    circuitLines.push({ x, worldY, len, horiz,
+      pulse: Math.random()*Math.PI*2,
+      speed: Math.random()*0.8+0.2 });
+  }
+}
+initCircuit();
+
+function drawCircuit() {
+  circuitLines.forEach(c => {
+    const cy = c.worldY - cameraY * 0.7;
+    if (cy < -20 || cy > H+20) return;
+    const p = 0.4 + 0.4*Math.sin(Date.now()*0.002*c.speed + c.pulse);
+    ctx.save();
+    ctx.globalAlpha = p * 0.18;
+    ctx.strokeStyle = '#00ff88';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (c.horiz) {
+      ctx.moveTo(c.x, cy); ctx.lineTo(c.x + c.len, cy);
+      // junction dot
+      ctx.arc(c.x + c.len, cy, 2.5, 0, Math.PI*2);
+    } else {
+      ctx.moveTo(c.x, cy); ctx.lineTo(c.x, cy + c.len);
+      ctx.arc(c.x, cy + c.len, 2.5, 0, Math.PI*2);
+    }
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
+// ── DATA STREAM PARTICLES ────────────────────────────
+let dataStreams = [];
+function spawnDataStream() {
+  if (dataStreams.length > 30) return;
+  dataStreams.push({
+    x: Math.random() * W,
+    y: Math.random() * H,
+    vx: (Math.random()-.5)*1.5,
+    vy: (Math.random()-.5)*1.5,
+    life: 1,
+    char: MATRIX_CHARS[Math.floor(Math.random()*MATRIX_CHARS.length)],
+    color: Math.random()>0.5?'#00ff41':'#00ffff',
+  });
+}
+function drawDataStreams() {
+  for (let i = dataStreams.length-1; i >= 0; i--) {
+    const d = dataStreams[i];
+    d.x += d.vx; d.y += d.vy; d.life -= 0.018;
+    if (d.life <= 0) { dataStreams.splice(i,1); continue; }
+    ctx.save();
+    ctx.globalAlpha = d.life * 0.6;
+    ctx.fillStyle = d.color;
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(d.char, d.x, d.y);
+    ctx.restore();
+  }
+}
+
+// ── PORTAL NODES ────────────────────────────────────
+const PORTAL_DATA = [
+  { label:'LINKEDIN',    sub:'open to opportunities',             color:'#00ffff', glow:'#00ffff', url:'https://www.linkedin.com/in/arik-zaslavski-70a412273/', worldDepth: 0.08 },
+  { label:'GITHUB',      sub:'arikzas25 · open source work',      color:'#ff00ff', glow:'#ff00ff', url:'https://github.com/arikzas25',                           worldDepth: 0.15 },
+  { label:'KEYBOUND',    sub:'C++ · OOP · graded 100/100',        color:'#ffff00', glow:'#ffff00', url:'https://github.com/arikzas25?tab=repositories',          worldDepth: 0.35 },
+  { label:'DUNKING BALL',sub:'Unity · C# · mobile deployment',    color:'#ff6600', glow:'#ff6600', url:'https://github.com/arikzas25?tab=repositories',          worldDepth: 0.52 },
+  { label:'LIAV.DEV',   sub:'full-stack · deployed · client work',color:'#ff88ff', glow:'#ff88ff', url:'https://github.com/arikzas25?tab=repositories',          worldDepth: 0.68 },
+  { label:'WHATSAPP',   sub:'+972-52-708-0733',                   color:'#00ff88', glow:'#00ff88', url:'https://wa.me/972527080733',                             worldDepth: 0.82 },
+  { label:'EMAIL',      sub:'arik2510@gmail.com',                 color:'#aaaaff', glow:'#aaaaff', url:'https://mail.google.com/mail/?view=cm&to=arik2510@gmail.com', worldDepth: 0.94 },
+];
+
+class Portal {
+  constructor(data, idx, total) {
+    const side = idx % 2 === 0 ? -1 : 1;
+    this.x = W/2 + side * (W * (0.18 + Math.random() * 0.22));
+    this.worldY = data.worldDepth * (WORLD_HEIGHT - H) + H * (0.2 + Math.random() * 0.5);
+    this.vx = (Math.random()-.5)*0.3;
+    this.vy = (Math.random()-.5)*0.3;
+    this.label = data.label; this.sub = data.sub || '';
+    this.color = data.color; this.glow = data.glow; this.url = data.url;
+    this.radius = 56;
+    this.hovered = false;
+    this.exploding = false; this.explodeParticles = [];
+    this.explodeDone = false; this.explodeTimer = 0;
+    this.rotation = Math.random()*Math.PI*2;
+    this.rotSpeed = (Math.random()-.5)*0.008;
+    this.pulsePhase = Math.random()*Math.PI*2;
+    this.shape = [];
+    for (let i=0;i<11;i++) {
+      const a = (i/11)*Math.PI*2;
+      this.shape.push({a, r:0.75+Math.random()*0.35});
+    }
+  }
+
+  // Screen Y = worldY - cameraY
+  get screenY() { return this.worldY - cameraY; }
+
+  update() {
+    if (this.exploding) {
+      this.explodeTimer++;
+      this.explodeParticles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.05;p.life-=0.05;p.vx*=0.96;});
+      if (this.explodeTimer>50 && !this.explodeDone) {
+        this.explodeDone = true;
+      }
+      return;
+    }
+    // Drift horizontally only — worldY stays fixed (no vertical drift so they stay in zone)
+    this.x += this.vx; this.worldY += this.vy * 0.3;
+    if (this.x<this.radius||this.x>W-this.radius) this.vx*=-1;
+    this.x = Math.max(this.radius, Math.min(W-this.radius, this.x));
+    this.rotation += this.rotSpeed;
+
+    // Hover/tap detection: use mouse (works for both mouse and touch)
+    const sy = this.screenY;
+    const dx=mouse.x-this.x, dy=mouse.y-sy;
+    const onScreen = sy > -this.radius && sy < H + this.radius;
+    const hitRadius = isTouchDevice() ? this.radius + 24 : this.radius + 10;
+    this.hovered = onScreen && Math.sqrt(dx*dx+dy*dy) < hitRadius;
+  }
+
+  explode() {
+    if (this.exploding) return;
+    this.exploding = true;
+    const sy = this.screenY;
+    for (let i=0;i<30;i++) {
+      const a=Math.random()*Math.PI*2, sp=Math.random()*7+2;
+      this.explodeParticles.push({
+        x:this.x, y:sy,
+        vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+        life:1, size:Math.random()*4+1.5,
+        color:Math.random()>.5?this.color:'#fff'
+      });
+    }
+    linksUnlocked++;
+    score += 500;
+    updateHUD();
+    // Check if all regular nodes collected → spawn boss bio node
+    const allDone = asteroids.every(a => a.explodeDone || a.exploding || a === this);
+    if (allDone && !bossNodeSpawned) spawnBossNode();
+  }
+
+  draw() {
+    const sy = this.screenY;
+    // Skip if completely off screen
+    if (sy < -this.radius*2 || sy > H + this.radius*2) return;
+    if (this.explodeDone) return;
+
+    if (this.exploding) {
+      ctx.save();
+      this.explodeParticles.forEach(p=>{
+        if(p.life<=0)return;
+        ctx.globalAlpha = p.life * 0.9;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size*p.life, 0, Math.PI*2);
+        ctx.fill();
+      });
+      ctx.restore();
+      const prog = this.explodeTimer/50;
+      if (prog < 1) {
+        ctx.save();
+        ctx.globalAlpha = (1-prog)*0.7;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(this.x, sy, prog*100, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      return;
+    }
+
+    // Fade in as it enters screen from below
+    const fadeEdge = 80;
+    const fadeAlpha = sy > H - fadeEdge
+      ? Math.max(0, (H - sy) / fadeEdge)
+      : 1;
+
+    const pulse = 1 + 0.06*Math.sin(Date.now()*0.003+this.pulsePhase);
+    const r = this.radius * pulse;
+
+    ctx.save(); ctx.globalAlpha = fadeAlpha;
+    ctx.translate(this.x, sy);
+
+    // Outer orbit ring
+    const rp=0.5+0.5*Math.sin(Date.now()*0.004+this.pulsePhase);
+    ctx.save();
+    ctx.rotate(Date.now()*0.001);
+    ctx.strokeStyle=this.color;ctx.lineWidth=1;ctx.globalAlpha=fadeAlpha*(0.2+0.3*rp);
+    ctx.setLineDash([4,10]);ctx.beginPath();ctx.arc(0,0,r*1.3,0,Math.PI*2);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // Hexagonal node body
+    ctx.save();
+    ctx.rotate(this.rotation);
+    if (this.hovered) {
+      const gg=ctx.createRadialGradient(0,0,r*.4,0,0,r*1.6);
+      gg.addColorStop(0,this.color+'33');gg.addColorStop(1,'transparent');
+      ctx.beginPath();ctx.arc(0,0,r*1.6,0,Math.PI*2);ctx.fillStyle=gg;ctx.fill();
+    }
+    ctx.beginPath();
+    for(let i=0;i<6;i++){
+      const a=(i/6)*Math.PI*2 - Math.PI/6;
+      const px=Math.cos(a)*r, py=Math.sin(a)*r;
+      if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+    }
+    ctx.closePath();
+    const bg=ctx.createRadialGradient(-r*.2,-r*.2,0,0,0,r);
+    bg.addColorStop(0,'#0a1a0a');bg.addColorStop(.6,'#050d05');bg.addColorStop(1,'#020502');
+    ctx.fillStyle=bg;ctx.shadowBlur=this.hovered?25:12;ctx.shadowColor=this.glow;ctx.fill();
+    ctx.strokeStyle=this.color;ctx.lineWidth=this.hovered?2.5:1.5;ctx.stroke();
+
+    // Inner hexagon detail
+    ctx.beginPath();
+    for(let i=0;i<6;i++){
+      const a=(i/6)*Math.PI*2 - Math.PI/6;
+      ctx.lineTo(Math.cos(a)*r*0.55, Math.sin(a)*r*0.55);
+    }
+    ctx.closePath();
+    ctx.strokeStyle=this.color;ctx.lineWidth=0.7;ctx.globalAlpha=fadeAlpha*0.35;ctx.stroke();
+    ctx.restore();
+
+    // Label (no rotation)
+    ctx.globalAlpha=fadeAlpha;
+    ctx.font=`${this.hovered?13:11}px 'Share Tech Mono',monospace`;
+    ctx.fillStyle=this.color;ctx.shadowBlur=10;ctx.shadowColor=this.color;
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(this.label,0,0);
+    if (this.sub) {
+      ctx.font="9px 'Share Tech Mono',monospace";ctx.fillStyle=this.color;
+      ctx.globalAlpha=fadeAlpha*0.6;ctx.shadowBlur=4;
+      ctx.fillText(this.sub, 0, 14);
+    }
+    if(this.hovered){
+      ctx.font="10px 'Share Tech Mono',monospace";ctx.fillStyle='#afffaf';
+      ctx.globalAlpha=fadeAlpha;ctx.shadowBlur=5;ctx.shadowColor='#afffaf';
+      ctx.fillText('→ activate()',0, this.sub ? 28 : 18);
+    }
+    ctx.restore();
+  }
+}
+
+const asteroids = PORTAL_DATA.map((d,i)=>new Portal(d,i,PORTAL_DATA.length));
+
+// ── BOSS BIO NODE ────────────────────────────────────
+let bossNode = null;
+let bossNodeSpawned = false;
+
+const BIO_LINES = [
+  { label: 'ROLE',     value: 'Data Science & AI — BSc student' },
+  { label: 'STACK',    value: 'Python · C++ · C# · JavaScript' },
+  { label: 'ML/AI',    value: 'sklearn · numpy · pandas · PyTorch' },
+  { label: 'DEV',      value: 'Unity · OOP · REST · Git · CI/CD' },
+  { label: 'PROJECTS', value: 'KeyBound · DunkingBall · Liav.dev' },
+  { label: 'CONTACT',  value: 'arik2510@gmail.com' },
+];
+
+class BossNode {
+  constructor() {
+    this.x = W / 2;
+    this.worldY = cameraY + H / 2; // spawn at current center of view
+    this.radius = 0;               // grows in
+    this.targetRadius = 110;
+    this.rotation = 0;
+    this.pulsePhase = 0;
+    this.hovered = false;
+    this.activated = false;
+    this.activateTimer = 0;
+    this.ringAngle = 0;
+    this.explodeParticles = [];
+    this.explodeDone = false;
+    this.url = 'https://github.com/arikzas25';
+    this.spawnAlpha = 0;           // fades in
+  }
+
+  get screenY() { return this.worldY - cameraY; }
+
+  update() {
+    this.rotation += 0.004;
+    this.ringAngle += 0.012;
+    this.pulsePhase += 0.04;
+    // Grow in
+    if (this.radius < this.targetRadius) this.radius = Math.min(this.targetRadius, this.radius + 2.5);
+    this.spawnAlpha = Math.min(1, this.spawnAlpha + 0.015);
+
+    if (this.activated) {
+      this.activateTimer++;
+      this.explodeParticles.forEach(p => {
+        p.x += p.vx; p.y += p.vy; p.vy += 0.04; p.life -= 0.012; p.vx *= 0.98;
+      });
+      if (this.activateTimer > 120) this.explodeDone = true;
+      return;
+    }
+
+    const sy = this.screenY;
+    const dx = mouse.x - this.x, dy = mouse.y - sy;
+    const hr = isTouchDevice() ? this.radius + 30 : this.radius + 14;
+    this.hovered = Math.sqrt(dx*dx+dy*dy) < hr;
+  }
+
+  activate() {
+    if (this.activated) return;
+    this.activated = true;
+    score += 2000;
+    linksUnlocked++;
+    updateHUD();
+    // Massive particle burst
+    const sy = this.screenY;
+    for (let i = 0; i < 80; i++) {
+      const a = Math.random()*Math.PI*2, sp = Math.random()*10+2;
+      this.explodeParticles.push({
+        x: this.x, y: sy,
+        vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
+        life: 1, size: Math.random()*5+2,
+        color: ['#00ff41','#00ffcc','#ffff00','#fff','#afffaf'][Math.floor(Math.random()*5)]
+      });
+    }
+    if (this.url) window.open(this.url, '_blank');
+    showBioUnlocked();
+  }
+
+  draw() {
+    if (this.explodeDone) return;
+    const sy = this.screenY;
+    if (sy < -this.targetRadius*2 || sy > H + this.targetRadius*2) return;
+    const r = this.radius;
+    const alpha = this.spawnAlpha;
+    const pulse = 0.5 + 0.5*Math.sin(this.pulsePhase);
+
+    if (this.activated) {
+      // Explosion burst
+      ctx.save();
+      this.explodeParticles.forEach(p => {
+        if (p.life <= 0) return;
+        ctx.globalAlpha = p.life * 0.9;
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size*p.life, 0, Math.PI*2); ctx.fill();
+      });
+      ctx.restore();
+      return;
+    }
+
+    ctx.save(); ctx.globalAlpha = alpha;
+
+    // Outer glow halo
+    const glow = ctx.createRadialGradient(this.x, sy, r*0.6, this.x, sy, r*2.2);
+    glow.addColorStop(0, `rgba(0,255,65,${0.07*pulse})`);
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(this.x, sy, r*2.2, 0, Math.PI*2); ctx.fill();
+
+    // Spinning orbit rings
+    for (let ring = 0; ring < 3; ring++) {
+      ctx.save();
+      ctx.translate(this.x, sy);
+      ctx.rotate(this.ringAngle * (ring % 2 === 0 ? 1 : -1) + ring*1.1);
+      ctx.strokeStyle = ring === 0 ? '#00ff41' : ring === 1 ? '#00ffcc' : '#ffff00';
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = alpha * (0.2 + 0.15*pulse);
+      ctx.setLineDash([8, ring===0?14:20]);
+      ctx.beginPath(); ctx.arc(0, 0, r*(1.35 + ring*0.18), 0, Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // Main hexagon body
+    ctx.save(); ctx.translate(this.x, sy); ctx.rotate(this.rotation);
+    const bg = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    bg.addColorStop(0, '#0a1a0a'); bg.addColorStop(0.6, '#040c04'); bg.addColorStop(1, '#020502');
+    ctx.fillStyle = bg;
+    ctx.shadowBlur = this.hovered ? 40 : 22;
+    ctx.shadowColor = '#00ff41';
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i/6)*Math.PI*2 - Math.PI/6;
+      i === 0 ? ctx.moveTo(Math.cos(a)*r, Math.sin(a)*r) : ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#00ff41'; ctx.lineWidth = this.hovered ? 3 : 2; ctx.stroke();
+
+    // Inner hexagon
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i/6)*Math.PI*2 - Math.PI/6;
+      i === 0 ? ctx.moveTo(Math.cos(a)*r*.55, Math.sin(a)*r*.55) : ctx.lineTo(Math.cos(a)*r*.55, Math.sin(a)*r*.55);
+    }
+    ctx.closePath(); ctx.strokeStyle='#00ff41'; ctx.lineWidth=1; ctx.globalAlpha=alpha*0.4; ctx.stroke();
+    ctx.restore();
+
+    // Bio text inside
+    ctx.save(); ctx.translate(this.x, sy); ctx.globalAlpha = alpha;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+    // Title
+    ctx.font = "bold 13px 'Share Tech Mono',monospace";
+    ctx.fillStyle = '#afffaf'; ctx.shadowBlur = 12; ctx.shadowColor = '#00ff41';
+    ctx.fillText('ARIK.DEV', 0, -r*0.52);
+
+    // Bio lines
+    const lineH = r * 0.18;
+    const startY = -r*0.28;
+    BIO_LINES.forEach((line, i) => {
+      const y = startY + i * lineH;
+      if (Math.abs(y) > r*0.75) return;
+      ctx.font = "8px 'Share Tech Mono',monospace";
+      ctx.fillStyle = '#446644'; ctx.shadowBlur = 0;
+      ctx.fillText(line.label + ':', -r*0.02, y - 4);
+      ctx.font = "9px 'Share Tech Mono',monospace";
+      ctx.fillStyle = '#00ffcc'; ctx.shadowBlur = 6; ctx.shadowColor = '#00ffcc';
+      ctx.fillText(line.value, 0, y + 7);
+    });
+
+    if (this.hovered) {
+      ctx.font = "11px 'Share Tech Mono',monospace";
+      ctx.fillStyle = '#ffff00'; ctx.shadowBlur = 10; ctx.shadowColor = '#ffff00';
+      ctx.fillText('→ UNLOCK FULL PROFILE', 0, r*0.68);
+    }
+    ctx.restore();
+    ctx.restore();
+  }
+}
+
+function spawnBossNode() {
+  bossNodeSpawned = true;
+  bossNode = new BossNode();
+  showWaveAnnounce('BOSS');
+}
+
+function showBioUnlocked() {
+  waveAnn.textContent = '🏆 ALL NODES ACTIVATED — profile unlocked!';
+  waveAnn.style.color = '#ffff00';
+  waveAnn.style.textShadow = '0 0 20px #ffff00';
+  waveAnn.style.opacity = 1;
+  if (waveAnnTimeout) clearTimeout(waveAnnTimeout);
+  waveAnnTimeout = setTimeout(() => { waveAnn.style.opacity = 0; }, 3500);
+  // Trigger win screen after the celebration plays out
+  setTimeout(gameWin, 3800);
+}
+canvas.addEventListener('click', () => {
+  if (!gameRunning) return;
+  asteroids.forEach(a => {
+    if (a.hovered && !a.exploding && !a.explodeDone) {
+      if (a.url && !a.url.startsWith('#')) window.open(a.url, '_blank');
+      a.explode();
+    }
+  });
+  if (bossNode && bossNode.hovered && !bossNode.activated) bossNode.activate();
+});
+
+// ── HAZARD ROCKS ────────────────────────────────────
+const hazards = [];
+let bossWaveActive = false;
+let glitchFrames = 0;
+
+class Hazard {
+  constructor(speed, opts={}) {
+    this.boss = opts.boss || false;
+    this.homing = opts.homing || false;
+
+    const edge = Math.floor(Math.random()*4);
+    if(edge===0){this.x=Math.random()*W;this.y=-25;}
+    else if(edge===1){this.x=W+25;this.y=Math.random()*H;}
+    else if(edge===2){this.x=Math.random()*W;this.y=H+25;}
+    else{this.x=-25;this.y=Math.random()*H;}
+
+    const tx=W/2+(Math.random()-.5)*W*.65;
+    const ty=H/2+(Math.random()-.5)*H*.65;
+    const dx=tx-this.x, dy=ty-this.y;
+    const len=Math.sqrt(dx*dx+dy*dy);
+    const spd=speed*(this.boss?0.55:(0.65+Math.random()*.9));
+    this.vx=(dx/len)*spd;
+    this.vy=(dy/len)*spd;
+    this.radius = this.boss ? 30+Math.random()*12 : 10+Math.random()*14;
+    this.rotation=Math.random()*Math.PI*2;
+    this.rotSpeed=(Math.random()-.5)*(this.boss?0.03:0.06);
+    this.shape=[];
+    const pts = this.boss ? 8 : 9;
+    for(let i=0;i<pts;i++){const a=(i/pts)*Math.PI*2;this.shape.push({a,r:0.55+Math.random()*0.55});}
+    this.dead=false;
+    if (this.boss) {
+      this.color='#ff0044';
+    } else {
+      const hues=['#ff3300','#ff5500','#ff2200','#cc2200','#ff4400','#dd1100'];
+      this.color=hues[Math.floor(Math.random()*hues.length)];
+    }
+    this.homingDelay = 60 + Math.floor(Math.random()*60); // frames before homing kicks in
+  }
+
+  update(){
+    // Homing: steer toward ship after delay
+    if ((this.homing || this.boss) && this.homingDelay > 0) {
+      this.homingDelay--;
+    } else if (this.homing || this.boss) {
+      const dx = ship.x - this.x, dy = ship.y - this.y;
+      const dist = Math.sqrt(dx*dx+dy*dy);
+      const turnStrength = this.boss ? 0.025 : 0.018;
+      if (dist > 1) {
+        this.vx += (dx/dist) * turnStrength;
+        this.vy += (dy/dist) * turnStrength;
+        // Cap speed
+        const spd = Math.sqrt(this.vx*this.vx+this.vy*this.vy);
+        const maxSpd = this.boss ? 5 : 7;
+        if (spd > maxSpd) { this.vx=(this.vx/spd)*maxSpd; this.vy=(this.vy/spd)*maxSpd; }
+      }
+    }
+    this.x+=this.vx;this.y+=this.vy;this.rotation+=this.rotSpeed;
+    if(this.x<-120||this.x>W+120||this.y<-120||this.y>H+120) this.dead=true;
+  }
+
+  draw(){
+    const r=this.radius;
+    ctx.save();ctx.translate(this.x,this.y);ctx.rotate(this.rotation);
+
+    // Glow for boss
+    if (this.boss) {
+      const gPulse = 0.5+0.5*Math.sin(Date.now()*0.008);
+      ctx.shadowBlur = 20+gPulse*15;
+      ctx.shadowColor = '#ff0044';
+    }
+
+    ctx.beginPath();
+    for(let i=0;i<this.shape.length;i++){
+      const a=(i/this.shape.length)*Math.PI*2;
+      const pr=this.shape[i];
+      const rx=Math.cos(a)*r*(pr?pr.r:1);
+      const ry=Math.sin(a)*r*(pr?pr.r:1);
+      if(i===0)ctx.moveTo(rx,ry);else ctx.lineTo(rx,ry);
+    }
+    ctx.closePath();
+    const bg=ctx.createRadialGradient(0,0,0,0,0,r);
+    bg.addColorStop(0, this.boss?'#3a0011':'#2a0000');
+    bg.addColorStop(1, this.boss?'#1a0008':'#0a0000');
+    ctx.fillStyle=bg;ctx.fill();
+    ctx.strokeStyle=this.color;ctx.lineWidth=this.boss?2.5:1.5;ctx.stroke();
+
+    ctx.strokeStyle=this.color;ctx.lineWidth=0.8;ctx.globalAlpha=0.5;
+    ctx.beginPath();ctx.moveTo(-r*.4,0);ctx.lineTo(r*.4,0);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,-r*.4);ctx.lineTo(0,r*.4);ctx.stroke();
+
+    ctx.globalAlpha=0.8;
+    ctx.fillStyle=this.color;
+    ctx.font=`${Math.floor(r*(this.boss?0.28:0.35))}px monospace`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(this.boss?'BOSS':'ERR',0,0);
+
+    ctx.restore();
+  }
+}
+
+// ── PARTICLES ───────────────────────────────────────
+const particles = [];
+function spawnDeathBurst(x,y) {
+  for(let i=0;i<22;i++){
+    const a=Math.random()*Math.PI*2, sp=Math.random()*6+1;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,size:Math.random()*3+1,color:Math.random()>.5?'#ff3300':'#ff8800'});
+  }
+}
+
+// ── SHIP ────────────────────────────────────────────
+class Ship {
+  constructor(){
+    this.x=W/2;this.y=H/2;this.vx=0;this.vy=0;
+    this.trail=[];this.thrustParticles=[];
+  }
+  update(){
+    const dx=mouse.x-this.x,dy=mouse.y-this.y,dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist>5){const sp=Math.min(dist*.08,10);this.vx+=(dx/dist)*sp*.15;this.vy+=(dy/dist)*sp*.15;}
+    this.vx*=0.88;this.vy*=0.88;
+    this.x+=this.vx;this.y+=this.vy;
+    this.x=Math.max(20,Math.min(W-20,this.x));
+    this.y=Math.max(20,Math.min(H-20,this.y));
+
+    // ── CAMERA SCROLL: ship past middle scrolls world ──
+    if(gameRunning){
+      // Scroll DOWN when ship in bottom half
+      const downZone = H * 0.52;
+      if(this.y > downZone){
+        const depth = (this.y - downZone) / (H * 0.48);
+        targetCameraY += depth * 4.5;
+      }
+      // Scroll UP when ship in top half
+      const upZone = H * 0.48;
+      if(this.y < upZone){
+        const depth = (upZone - this.y) / (H * 0.48);
+        targetCameraY -= depth * 4.5;
+      }
+      // Clamp between 0 and world bottom
+      targetCameraY = Math.max(0, Math.min(targetCameraY, WORLD_HEIGHT - H));
+      cameraY += (targetCameraY - cameraY) * 0.06;
+    }
+
+    this.trail.push({x:this.x,y:this.y,life:1});
+    if(this.trail.length>22)this.trail.shift();
+    this.trail.forEach(t=>t.life-=0.045);
+    const sp=Math.sqrt(this.vx*this.vx+this.vy*this.vy);
+    if(sp>1){
+      const angle=Math.atan2(this.vy,this.vx)+Math.PI;
+      for(let i=0;i<2;i++) this.thrustParticles.push({
+        x:this.x+Math.cos(angle)*10,y:this.y+Math.sin(angle)*10,
+        vx:Math.cos(angle+(Math.random()-.5)*.8)*(sp*.6+Math.random()*2),
+        vy:Math.sin(angle+(Math.random()-.5)*.8)*(sp*.6+Math.random()*2),
+        life:1,size:Math.random()*3+1
+      });
+    }
+    this.thrustParticles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life-=0.06;});
+    this.thrustParticles=this.thrustParticles.filter(p=>p.life>0);
+  }
+  draw(){
+    if(invincible&&Math.floor(Date.now()/80)%2===0) return;
+    const angle=Math.atan2(this.vy,this.vx);
+
+    // Data trail — green matrix chars
+    this.trail.forEach((t,i)=>{
+      if(t.life<=0)return;
+      ctx.save();ctx.globalAlpha=t.life*.3;ctx.fillStyle='#00ff41';
+      ctx.font=`${Math.floor(6+i/this.trail.length*4)}px monospace`;
+      ctx.textAlign='center';
+      const ch=MATRIX_CHARS[Math.floor((i+Date.now()*0.01)%MATRIX_CHARS.length)];
+      ctx.fillText(ch,t.x,t.y);ctx.restore();
+    });
+
+    // Thrust particles — data bits
+    this.thrustParticles.forEach(p=>{
+      ctx.save();ctx.globalAlpha=p.life*.8;
+      ctx.fillStyle=Math.random()>0.5?'#00ff41':'#00ffff';
+      ctx.font='7px monospace';ctx.textAlign='center';
+      ctx.fillText(Math.random()>0.5?'0':'1',p.x,p.y);ctx.restore();
+    });
+
+    ctx.save();ctx.translate(this.x,this.y);ctx.rotate(angle+Math.PI/2);
+    ctx.shadowBlur=18;ctx.shadowColor='#00ff88';
+
+    // Diamond / data-packet shape
+    ctx.beginPath();
+    ctx.moveTo(0,-18);
+    ctx.lineTo(11,0);
+    ctx.lineTo(0,12);
+    ctx.lineTo(-11,0);
+    ctx.closePath();
+    const sg=ctx.createLinearGradient(0,-18,0,12);
+    sg.addColorStop(0,'#afffaf');sg.addColorStop(.4,'#00ff88');sg.addColorStop(1,'#003322');
+    ctx.fillStyle=sg;ctx.fill();
+    ctx.strokeStyle='#00ff88';ctx.lineWidth=1.5;ctx.stroke();
+
+    // Inner diamond detail
+    ctx.beginPath();
+    ctx.moveTo(0,-10);ctx.lineTo(6,0);ctx.lineTo(0,6);ctx.lineTo(-6,0);ctx.closePath();
+    ctx.fillStyle='rgba(0,255,136,0.15)';ctx.fill();
+    ctx.strokeStyle='#afffaf';ctx.lineWidth=0.8;ctx.stroke();
+
+    // Core dot
+    ctx.beginPath();ctx.arc(0,0,2,0,Math.PI*2);
+    ctx.fillStyle='#fff';ctx.fill();
+
+    ctx.restore();
+  }
+  collidesWith(h){
+    if(invincible)return false;
+    const dx=this.x-h.x,dy=this.y-h.y;
+    return Math.sqrt(dx*dx+dy*dy)<h.radius+9;
+  }
+}
+
+const ship = new Ship();
+
+// ── CURSOR ──────────────────────────────────────────
+function drawCursor(){
+  if (isTouchDevice()) {
+    if (!gameRunning) return;
+    const x=mouse.x, y=mouse.y, t=Date.now()*0.004;
+    ctx.save();
+    ctx.globalAlpha=0.4;
+    ctx.strokeStyle='#00ff41'; ctx.lineWidth=1.5;
+    ctx.setLineDash([4,6]);
+    ctx.beginPath();ctx.arc(x,y,24+Math.sin(t)*4,0,Math.PI*2);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    return;
+  }
+  const x=mouse.x, y=mouse.y, t=Date.now()*0.003;
+  ctx.save();
+  ctx.translate(x,y); ctx.rotate(t*0.5);
+  ctx.strokeStyle='rgba(0,255,136,0.7)'; ctx.lineWidth=1;
+  ctx.strokeRect(-7,-7,14,14);
+  ctx.rotate(-t*0.5);
+  ctx.strokeStyle='rgba(0,255,136,0.9)';
+  ctx.beginPath();ctx.moveTo(-12,0);ctx.lineTo(-4,0);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(4,0);ctx.lineTo(12,0);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,-12);ctx.lineTo(0,-4);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,4);ctx.lineTo(0,12);ctx.stroke();
+  ctx.restore();
+}
+
+// ── TERMINAL BOOT SEQUENCE ──────────────────────────
+const BOOT_LINES = [
+  { text: 'arik@portfolio:~$ ./portfolio --load', cls: 't-prompt', delay: 0 },
+  { text: 'Initializing ARIK.DEV v2.4.1...', cls: 't-out', delay: 400 },
+  { text: '──────────────────────────────────────────────────', cls: 't-dim', delay: 700 },
+  { text: 'WHO AM I', cls: 't-out', delay: 900 },
+  { text: '  Arik Zaslavski — BSc Data Science & AI', cls: 't-white', delay: 1100 },
+  { text: '  Software & ML developer, based in Israel', cls: 't-dim', delay: 1280 },
+  { text: '──────────────────────────────────────────────────', cls: 't-dim', delay: 1500 },
+  { text: 'TECHNICAL STACK', cls: 't-out', delay: 1700 },
+  { text: '  Languages : Python · C++ · C# · JavaScript', cls: 't-cyan', delay: 1880 },
+  { text: '  ML / AI   : sklearn · PyTorch · numpy · pandas', cls: 't-cyan', delay: 2050 },
+  { text: '  Dev tools : Unity · Git · REST APIs · CI/CD', cls: 't-cyan', delay: 2220 },
+  { text: '──────────────────────────────────────────────────', cls: 't-dim', delay: 2450 },
+  { text: 'PROJECTS', cls: 't-out', delay: 2650 },
+  { text: '  KeyBound      C++ · OOP · graded 100/100', cls: 't-dim', delay: 2830 },
+  { text: '  DunkingBall   Unity · C# · mobile deployment', cls: 't-dim', delay: 3000 },
+  { text: '  Liav.dev      full-stack · client · deployed', cls: 't-dim', delay: 3170 },
+  { text: '──────────────────────────────────────────────────', cls: 't-dim', delay: 3400 },
+  { text: 'CONTROLS', cls: 't-out', delay: 3600 },
+  { text: '  mouse     →  navigate', cls: 't-dim', delay: 3780 },
+  { text: '  click     →  open project nodes', cls: 't-dim', delay: 3920 },
+  { text: '  survive   →  dodge ERR packets', cls: 't-dim', delay: 4060 },
+  { text: '──────────────────────────────────────────────────', cls: 't-dim', delay: 4300 },
+  { text: 'Ready.', cls: 't-bold t-cursor', delay: 4500 },
+];
+
+(function runBootSequence() {
+  const body = document.getElementById('terminal-body');
+  const touch = window.matchMedia('(pointer: coarse)').matches;
+  const lines = BOOT_LINES.map(l => {
+    if (l.text === '  mouse     →  navigate data space')
+      return { ...l, text: touch ? '  drag      →  navigate data space' : l.text };
+    if (l.text === '  click     →  activate neural nodes')
+      return { ...l, text: touch ? '  tap       →  activate neural nodes' : l.text };
+    return l;
+  });
+  lines.forEach(({ text, cls, delay }) => {
+    setTimeout(() => {
+      const line = document.createElement('div');
+      line.className = cls;
+      line.textContent = text;
+      body.appendChild(line);
+      body.scrollTop = body.scrollHeight;
+    }, delay);
+  });
+})();
+
+// ── CS EASTER EGGS (floating text in world) ─────────
+const CS_QUOTES = [
+  // Personal Arik facts
+  'KeyBound.cpp — score: 100/100 🏆',
+  'arik@uni: BSc DataSci + AI',
+  'DunkingBall.apk — Unity mobile',
+  'Liav·PureGlow // live on gh-pages',
+  'git push origin --force  // yolo',
+  'arikzas25  // find me on github',
+  'C++ | Python | Unity | ML 🧠',
+  '// co-developed with Arik Z.',
+  'model accuracy: still training...',
+  'npm run build // Liav site 💅',
+  // Classic CS
+  'printf("Hello, World!\\n");',
+  'while(alive) { dodge(); }',
+  'git commit -m "fix: skill issue"',
+  'O(n log n) — good enough',
+  'sudo make me a sandwich',
+  '// TODO: fix before demo',
+  'NaN !== NaN  /* wat */',
+  'rm -rf node_modules',
+  '99 bugs in the code...',
+  'undefined is not a function',
+  'it works on my machine™',
+  'loss: 0.0042 — converging',
+  'train_test_split(life, 0.2)',
+  'import antigravity  # python',
+  '#include <courage.h>',
+  '0xDEADBEEF',
+  '¯\\_(ツ)_/¯  // shrug.py',
+  'segfault. good talk.',
+  '// this code sparks joy',
+  'epoch 42: val_loss → ∞  uh oh',
+];
+
+let easterEggs = [];
+function initEasterEggs() {
+  easterEggs = [];
+  CS_QUOTES.forEach((q, i) => {
+    easterEggs.push({
+      text: q,
+      x: 60 + Math.random() * (W - 120),
+      worldY: 100 + Math.random() * (WORLD_HEIGHT - 200),
+      alpha: Math.random() * 0.3 + 0.08,
+      drift: (Math.random() - 0.5) * 0.15,
+      pulse: Math.random() * Math.PI * 2,
+      color: ['#003a00','#002a22','#1a1a00','#1a0000'][i % 4],
+    });
+  });
+}
+initEasterEggs();
+
+function drawEasterEggs() {
+  const t = Date.now();
+  easterEggs.forEach(e => {
+    const sy = e.worldY - cameraY * 0.75;
+    if (sy < -30 || sy > H + 30) return;
+    e.x += e.drift;
+    if (e.x < 0) e.x = W;
+    if (e.x > W) e.x = 0;
+    const p = e.alpha * (0.7 + 0.3 * Math.sin(t * 0.0008 + e.pulse));
+    ctx.save();
+    ctx.globalAlpha = p;
+    ctx.fillStyle = e.color === '#003a00' ? '#00ff41' :
+                    e.color === '#002a22' ? '#00ffcc' :
+                    e.color === '#1a1a00' ? '#cccc00' : '#cc2200';
+    ctx.font = '11px "Share Tech Mono", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(e.text, e.x, sy);
+    ctx.restore();
+  });
+}
+
+// Restore normal cursor when overlay screens are visible
+function updateCursor() {
+  const startEl = document.getElementById('start-screen');
+  const goEl    = document.getElementById('gameover-screen');
+  const startHidden = startEl.style.display === 'none';
+  const goVisible   = goEl.style.display === 'flex';
+  const winVisible  = winScreen.style.display === 'flex';
+  document.body.style.cursor = (!startHidden || goVisible || winVisible) ? 'default' : 'none';
+}
+// Run immediately so cursor works on the start screen before any click
+updateCursor();
+
+
+let scoreTickTimer = 0;
+function loop(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#00050a';ctx.fillRect(0,0,W,H);
+  drawMatrix();
+  drawEasterEggs();
+  updateNeuralNet();
+  drawNeuralNet();
+  drawCircuit();
+  if(Math.random()<0.08) spawnDataStream();
+  drawDataStreams();
+
+  if(gameRunning){
+    // Wave timer
+    waveTimer++;
+    if(waveTimer>=WAVE_INTERVAL){
+      waveTimer=0; wave++;
+      hazardSpeed = Math.min(2.2 + wave*0.5, 9);
+      spawnRate   = Math.max(18, 80 - wave*9);
+      updateHUD();
+      showWaveAnnounce(wave);
+      // Boss wave every 3 epochs
+      if (wave % 3 === 0) triggerBossWave();
+    }
+
+    // Spawn hazards
+    spawnTimer++;
+    if(spawnTimer>=spawnRate){
+      spawnTimer=0;
+      // From epoch 3: some ERR packets home in on ship
+      const homingChance = wave >= 3 ? Math.min(0.5, (wave-2)*0.1) : 0;
+      const isHoming = Math.random() < homingChance;
+      hazards.push(new Hazard(hazardSpeed, { homing: isHoming }));
+      if(wave>=2&&Math.random()<0.4) hazards.push(new Hazard(hazardSpeed, { homing: Math.random()<homingChance }));
+      if(wave>=4&&Math.random()<0.35) hazards.push(new Hazard(hazardSpeed));
+      if(wave>=6&&Math.random()<0.28) hazards.push(new Hazard(hazardSpeed, { homing: true }));
+      if(wave>=8&&Math.random()<0.2)  hazards.push(new Hazard(hazardSpeed));
+    }
+
+    // Invincibility countdown
+    if(invincible){ invincibleTimer--; if(invincibleTimer<=0)invincible=false; }
+
+    // Glitch effect countdown
+    if (glitchFrames > 0) {
+      glitchFrames--;
+      // Draw glitch scanline bars
+      ctx.save();
+      const numBars = 4 + Math.floor(Math.random()*4);
+      for (let i=0;i<numBars;i++) {
+        const gy = Math.random()*H;
+        const gh = 4+Math.random()*20;
+        ctx.globalAlpha = 0.12+Math.random()*0.15;
+        ctx.fillStyle = Math.random()>0.5?'#ff0000':'#00ff41';
+        ctx.fillRect(0, gy, W, gh);
+        // horizontal shift
+        const sliceY = Math.random()*H, sliceH = 10+Math.random()*30;
+        const shift = (Math.random()-.5)*30;
+        ctx.drawImage(canvas, 0, sliceY, W, sliceH, shift, sliceY, W, sliceH);
+      }
+      ctx.restore();
+    }
+
+    // Update & draw hazards
+    for(let i=hazards.length-1;i>=0;i--){
+      hazards[i].update();
+      if(hazards[i].dead){hazards.splice(i,1);continue;}
+      hazards[i].draw();
+      if(ship.collidesWith(hazards[i])){
+        spawnDeathBurst(ship.x,ship.y);
+        hazards.splice(i,1);
+        lives--; updateHUD(); flashHit();
+        glitchFrames = 18; // screen glitch on hit!
+        if(lives<=0) gameOver();
+        else { invincible=true; invincibleTimer=180; }
+      }
+    }
+
+    // General particles (death burst)
+    for(let i=particles.length-1;i>=0;i--){
+      const p=particles[i];
+      p.x+=p.vx;p.y+=p.vy;p.vy+=0.06;p.life-=0.035;
+      if(p.life<=0){particles.splice(i,1);continue;}
+      ctx.globalAlpha=p.life;
+      ctx.fillStyle=p.color;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);ctx.fill();
+    }
+    ctx.globalAlpha=1;
+
+    // Score ticks — survive bonus
+    scoreTickTimer++;
+    if(scoreTickTimer>=90){ scoreTickTimer=0; score+=wave*3; updateHUD(); }
+
+    // Update depth bar
+    const depthPct = Math.min(100, Math.round(cameraY / (WORLD_HEIGHT - H) * 100));
+    document.getElementById('depth-label').textContent = 'depth: ' + depthPct + '%';
+    const fill = document.getElementById('depth-fill');
+    fill.style.height = depthPct + '%';
+    fill.style.marginTop = (100 - depthPct) + '%';
+
+    // Scroll direction hints
+    if(ship.y > H * 0.48){
+      const alpha = Math.min(1,(ship.y - H*0.48)/(H*0.15)) * (0.5 + 0.5*Math.sin(Date.now()*0.005));
+      ctx.save(); ctx.globalAlpha = alpha;
+      ctx.strokeStyle = '#00ff41'; ctx.lineWidth = 1.5;
+      const ax = W/2, ay = H - 28;
+      ctx.beginPath();
+      ctx.moveTo(ax-10,ay-6); ctx.lineTo(ax,ay+6); ctx.lineTo(ax+10,ay-6);
+      ctx.stroke();
+      ctx.font = "11px 'Share Tech Mono',monospace";
+      ctx.fillStyle = '#006614'; ctx.textAlign = 'center';
+      ctx.fillText('// scrolling down', ax, ay - 14);
+      ctx.restore();
+    }
+    if(ship.y < H * 0.48 && cameraY > 10){
+      const alpha = Math.min(1,(H*0.48 - ship.y)/(H*0.15)) * (0.5 + 0.5*Math.sin(Date.now()*0.005));
+      ctx.save(); ctx.globalAlpha = alpha;
+      ctx.strokeStyle = '#00ff41'; ctx.lineWidth = 1.5;
+      const ax = W/2, ay = 28;
+      ctx.beginPath();
+      ctx.moveTo(ax-10,ay+6); ctx.lineTo(ax,ay-6); ctx.lineTo(ax+10,ay+6);
+      ctx.stroke();
+      ctx.font = "11px 'Share Tech Mono',monospace";
+      ctx.fillStyle = '#006614'; ctx.textAlign = 'center';
+      ctx.fillText('// scrolling up', ax, ay + 18);
+      ctx.restore();
+    }
+
+    // ── BOTTOM BEACON BAR: colored glows for portals below the screen ──
+    const belowPortals = asteroids.filter(a => !a.explodeDone && !a.exploding && a.screenY > H + 10);
+    if(belowPortals.length > 0){
+      // Dark strip along bottom
+      ctx.save();
+      const stripH = 28;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0, H - stripH, W, stripH);
+
+      // Label
+      const labelBlink = 0.6 + 0.4*Math.sin(Date.now()*0.003);
+      ctx.globalAlpha = labelBlink;
+      ctx.font = "11px 'Share Tech Mono',monospace";
+      ctx.fillStyle = '#446644';
+      ctx.textAlign = 'left';
+      ctx.fillText('// nodes below ▼', 12, H - 10);
+
+      // One glowing dot per portal below, evenly spaced
+      const spacing = Math.min(60, (W - 200) / (belowPortals.length + 1));
+      belowPortals.forEach((a, i) => {
+        const blink = 0.5 + 0.5*Math.sin(Date.now()*0.005 + a.pulsePhase);
+        const px = 160 + (i + 1) * spacing;
+        const py = H - 14;
+
+        // Glow halo
+        ctx.globalAlpha = 0.15 + 0.15*blink;
+        ctx.fillStyle = a.color;
+        ctx.beginPath(); ctx.arc(px, py, 14, 0, Math.PI*2); ctx.fill();
+
+        // Core dot
+        ctx.globalAlpha = 0.7 + 0.3*blink;
+        ctx.fillStyle = a.color;
+        ctx.shadowBlur = 10; ctx.shadowColor = a.color;
+        ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI*2); ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Label under dot
+        ctx.globalAlpha = 0.5 + 0.3*blink;
+        ctx.font = "9px 'Share Tech Mono',monospace";
+        ctx.fillStyle = a.color;
+        ctx.textAlign = 'center';
+        ctx.fillText(a.label, px, py + 14);
+
+        // Depth indicator — tiny bar below label
+        const distPct = Math.min(1, (a.screenY - H) / (WORLD_HEIGHT * 0.5));
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#333';
+        ctx.fillRect(px - 12, py + 17, 24, 2);
+        ctx.fillStyle = a.color;
+        ctx.fillRect(px - 12, py + 17, 24 * (1 - distPct), 2);
+      });
+
+      ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+  }
+
+  // Portal asteroids always on top
+  asteroids.forEach(a=>{a.update();a.draw();});
+
+  // Boss bio node
+  if (bossNode) { bossNode.update(); bossNode.draw(); }
+  if (bossNode && bossNode.explodeDone) bossNode = null;
+
+  // ── RADAR: show undiscovered portals below as pips on right edge ──
+  if(gameRunning){
+    asteroids.forEach(a => {
+      if(a.explodeDone || a.exploding) return;
+      const sy = a.screenY;
+      if(sy > H + 20) {
+        // Draw a small pip on the right edge showing depth
+        const depthRatio = Math.min(1, (sy - H) / (WORLD_HEIGHT - H));
+        const pipY = H * 0.2 + depthRatio * H * 0.6;
+        const blink = 0.5 + 0.5*Math.sin(Date.now()*0.006 + a.pulsePhase);
+        ctx.save();
+        ctx.globalAlpha = 0.4 + 0.5*blink;
+        ctx.fillStyle = a.color;
+        ctx.shadowBlur = 8; ctx.shadowColor = a.color;
+        ctx.beginPath(); ctx.arc(W - 14, pipY, 4, 0, Math.PI*2); ctx.fill();
+        // Arrow pointing right+down
+        ctx.strokeStyle = a.color; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(W-22, pipY); ctx.lineTo(W-16, pipY);
+        ctx.moveTo(W-19, pipY-3); ctx.lineTo(W-16, pipY); ctx.lineTo(W-19, pipY+3);
+        ctx.stroke();
+        ctx.restore();
+      }
+    });
+  }
+
+  ship.update();
+  ship.draw();
+  drawCursor();
+
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
