@@ -546,7 +546,8 @@ window.addEventListener('touchmove', e => {
 }, { passive: false });
 
 window.addEventListener('touchstart', e => {
-  e.preventDefault();
+  // Only block default (which suppresses button clicks) during gameplay
+  if (gameRunning) e.preventDefault();
   const t = e.touches[0];
   mouse.x = t.clientX;
   mouse.y = t.clientY;
@@ -554,8 +555,8 @@ window.addEventListener('touchstart', e => {
 
 // Tap = click on portal or boss node
 window.addEventListener('touchend', e => {
-  e.preventDefault();
   if (!gameRunning) return;
+  e.preventDefault();
   const t = e.changedTouches[0];
   const tx = t.clientX, ty = t.clientY;
   asteroids.forEach(a => {
